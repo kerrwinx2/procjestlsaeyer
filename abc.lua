@@ -2,11 +2,10 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local VirtualInputManager = game:GetService("VirtualInputManager") -- Bezpieczna emulacja kliknięć
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Pobieramy bezpieczną dla Twojego executora przestrzeń interfejsu
+-- Pobieramy bezpieczną przestrzeń interfejsu
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- Statusy (Domyślnie włączają się od razu automatycznie)
@@ -55,7 +54,6 @@ local function clearLockOn()
         local humanoid = myChar:FindFirstChildOfClass("Humanoid")
         local myRoot = myChar:FindFirstChild("HumanoidRootPart")
         if humanoid then humanoid.PlatformStand = false end
-        -- Przywracamy standardową grawitację i kolizje
         if myRoot then myRoot.CanCollide = true end
     end
 end
@@ -126,22 +124,26 @@ local function getClosestNPC()
     return closestNPC
 end
 
--- PĘTLA AUTO ATTACK (Wykonuje automatyczne kliknięcia, kiedy farm jest włączony)
+-- BEZPIECZNA PĘTLA ATRAKCYJNA (Dostosowana do każdego typu executora)
 task.spawn(function()
     while true do
         if autoFarmEnabled and farmWeld and farmWeld.Parent then
+            -- Sprawdzamy czy executor posiada standardowe funkcje klikania narzędzi robloxa
             pcall(function()
-                -- Emuluje fizyczne kliknięcie lewego myszki (Mouse Button 1) na środku ekranu
-                VirtualInputManager:SendMouseButtonEvent(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2, 0, true, game, 1)
-                task.wait(0.05)
-                VirtualInputManager:SendMouseButtonEvent(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2, 0, false, game, 1)
+                local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                if tool then
+                    tool:Activate() -- Bezpieczne aktywowanie trzymanej broni (miecza/pięści) w grze
+                else
+                    -- Alternatywa: Jeśli executor wspiera klasyczny mouseclick bez wirtualnych managerów
+                    if mouse1click then mouse1click() end
+                end
             end)
         end
-        task.wait(0.1) -- Szybkość ataku: 10 razy na sekundę
+        task.wait(0.12) -- Szybkość uderzeń (bardzo stabilna)
     end
 end)
 
--- Skaner w tle (wykrywa spawny przedmiotów)
+-- Skaner w tle
 task.spawn(function()
     while true do
         pcall(function()
@@ -224,7 +226,6 @@ local function updateEspGroup(database, enabledFlag, iconName, maxCollectDist)
     end
 end
 
--- SYSTEM REJESTRACJI I UNIERUCHOMIENIA KONTROLI FAZY RUCHU
 local isTweening = false
 
 RunService.RenderStepped:Connect(function()
