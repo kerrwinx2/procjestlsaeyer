@@ -29,7 +29,7 @@ screenGui.Name = "NoGui_RenderScreen"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = PlayerGui
 
--- Powiadomienie dźwiękowe/tekstowe o uruchomieniu
+-- Powiadomienie tekstowe o uruchomieniu
 local function createNotify(txt, color)
     local nt = Instance.new("TextLabel")
     nt.Size = UDim2.new(0, 300, 0, 30)
@@ -45,7 +45,7 @@ local function createNotify(txt, color)
     nt:Destroy()
 end
 
-task.spawn(function() createNotify("🚀 SKRYPT URUCHOMIONY! [L]-Lilie [P]-Skrzynie [H]-Farm", Color3.fromRGB(50, 255, 100)) end)
+task.spawn(function() createNotify("🚀 SKRYPT ZAŁADOWANY! [L]-Lilie [P]-Skrzynie [H]-Farm", Color3.fromRGB(50, 255, 100)) end)
 
 -- Funkcja czyszcząca fizyczne połączenie lock-on
 local function clearLockOn()
@@ -164,7 +164,7 @@ task.spawn(function()
     end
 end)
 
--- Renderer ESP i pętla Auto Farmu
+-- Renderer ESP
 local function updateEspGroup(database, enabledFlag, iconName, maxCollectDist)
     local myChar = LocalPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -209,7 +209,7 @@ local function updateEspGroup(database, enabledFlag, iconName, maxCollectDist)
     end
 end
 
--- Inicjalizacja fizycznych obiektów przyciągania (Lock-on)
+-- Fizyczna konfiguracja Lock-on (gładkie przyciąganie na 5 studów)
 local function setupLockOn(myRoot, npcRoot)
     if not farmAttachment then
         farmAttachment = Instance.new("Attachment")
@@ -223,7 +223,7 @@ local function setupLockOn(myRoot, npcRoot)
         targetAttachment.Parent = npcRoot
     end
     
-    -- Ustawienie stałego punktu przesunięcia: 5 studów z tyłu (Z = 5)
+    -- Stały punkt za plecami (5 studów wstecz)
     targetAttachment.CFrame = CFrame.new(0, 0, 5)
 
     if not alignPos then
@@ -231,7 +231,6 @@ local function setupLockOn(myRoot, npcRoot)
         alignPos.Name = "FarmAlignPos"
         alignPos.ForceLimitMode = Enum.ForceLimitMode.PerAxis
         alignPos.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-        -- Responsywność (im wyższa, tym silniejsze i szybsze przyciąganie, max 200)
         alignPos.Responsiveness = 200 
         alignPos.Attachment0 = farmAttachment
         alignPos.Attachment1 = targetAttachment
@@ -244,3 +243,9 @@ local function setupLockOn(myRoot, npcRoot)
         alignOrient.MaxTorque = math.huge
         alignOrient.Responsiveness = 200
         alignOrient.Attachment0 = farmAttachment
+        alignOrient.Attachment1 = targetAttachment
+        alignOrient.Parent = myRoot
+    end
+end
+
+-- Główna pętla renderu i farmu
