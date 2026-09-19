@@ -1,6 +1,8 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local VirtualInputManager = game:GetService("VirtualInputManager") -- Bezpieczna emulacja kliknięć
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -15,11 +17,8 @@ local autoFarmEnabled = false
 local savedLilies = {}
 local savedChests = {}
 
--- Obiekty fizyczne do płynnego poruszania (Lock-on)
-local farmAttachment = nil
-local targetAttachment = nil
-local alignPos = nil
-local alignOrient = nil
+-- Obiekty fizyczne do blokady pozycji (Weld-Lock)
+local farmWeld = nil
 
 -- Czyszczenie starych śmieci
 if PlayerGui:FindFirstChild("NoGui_RenderScreen") then PlayerGui.NoGui_RenderScreen:Destroy() end
@@ -47,16 +46,17 @@ end
 
 task.spawn(function() createNotify("🚀 SKRYPT ZAŁADOWANY! [L]-Lilie [P]-Skrzynie [H]-Farm", Color3.fromRGB(50, 255, 100)) end)
 
--- Funkcja czyszcząca fizyczne połączenie lock-on
+-- Funkcja uwalniająca postać z blokady (Weld-Lock)
 local function clearLockOn()
-    if alignPos then alignPos:Destroy() alignPos = nil end
-    if alignOrient then alignOrient:Destroy() alignOrient = nil end
-    if farmAttachment then farmAttachment:Destroy() farmAttachment = nil end
-    if targetAttachment then targetAttachment:Destroy() targetAttachment = nil end
+    if farmWeld then pcall(function() farmWeld:Destroy() end) farmWeld = nil end
     
     local myChar = LocalPlayer.Character
-    if myChar and myChar:FindFirstChild("Humanoid") then
-        myChar.Humanoid.PlatformStand = false
+    if myChar then
+        local humanoid = myChar:FindFirstChildOfClass("Humanoid")
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        if humanoid then humanoid.PlatformStand = false end
+        -- Przywracamy standardową grawitację i kolizje
+        if myRoot then myRoot.CanCollide = true end
     end
 end
 
@@ -72,11 +72,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     elseif input.KeyCode == Enum.KeyCode.H then
         autoFarmEnabled = not autoFarmEnabled
         if not autoFarmEnabled then clearLockOn() end
-        task.spawn(function() createNotify("⚔️ Auto Farm NPC: " .. (autoFarmEnabled and "ON" or "OFF"), autoFarmEnabled and Color3.fromRGB(50,255,100) or Color3.fromRGB(200,200,200)) end)
+        task.spawn(function() createNotify("⚔️ Auto Farm & Attack: " .. (autoFarmEnabled and "ON" or "OFF"), autoFarmEnabled and Color3.fromRGB(50,255,100) or Color3.fromRGB(200,200,200)) end)
     end
 end)
 
--- Funkcja pomocnicza dla linii i tekstu
+-- Funkcja pomocnicza dla linii i tekstu ESP
 local function createVisuals(color)
     local textLabel = Instance.new("TextLabel")
     textLabel.Size = UDim2.new(0, 200, 0, 30)
@@ -100,7 +100,7 @@ local function createVisuals(color)
     return textLabel, tracer
 end
 
--- Bezpieczne pobieranie NPC (Grove Raider)
+-- Bezpieczne pobieranie najbliższego NPC (Grove Raider)
 local function getClosestNPC()
     local closestNPC = nil
     local shortestDistance = math.huge
@@ -125,6 +125,21 @@ local function getClosestNPC()
     end)
     return closestNPC
 end
+
+-- PĘTLA AUTO ATTACK (Wykonuje automatyczne kliknięcia, kiedy farm jest włączony)
+task.spawn(function()
+    while true do
+        if autoFarmEnabled and farmWeld and farmWeld.Parent then
+            pcall(function()
+                -- Emuluje fizyczne kliknięcie lewego myszki (Mouse Button 1) na środku ekranu
+                VirtualInputManager:SendMouseButtonEvent(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2, 0, true, game, 1)
+                task.wait(0.05)
+                VirtualInputManager:SendMouseButtonEvent(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2, 0, false, game, 1)
+            end)
+        end
+        task.wait(0.1) -- Szybkość ataku: 10 razy na sekundę
+    end
+end)
 
 -- Skaner w tle (wykrywa spawny przedmiotów)
 task.spawn(function()
@@ -209,43 +224,16 @@ local function updateEspGroup(database, enabledFlag, iconName, maxCollectDist)
     end
 end
 
--- Fizyczna konfiguracja Lock-on (gładkie przyciąganie na 5 studów)
-local function setupLockOn(myRoot, npcRoot)
-    if not farmAttachment then
-        farmAttachment = Instance.new("Attachment")
-        farmAttachment.Name = "FarmAttachment"
-        farmAttachment.Parent = myRoot
-    end
+-- SYSTEM REJESTRACJI I UNIERUCHOMIENIA KONTROLI FAZY RUCHU
+local isTweening = false
+
+RunService.RenderStepped:Connect(function()
+    updateEspGroup(savedLilies, lilyEspEnabled, "🌸 Spider Lily", 80)
+    updateEspGroup(savedChests, chestEspEnabled, "📦 Sealed Cache T1", 50)
     
-    if not targetAttachment then
-        targetAttachment = Instance.new("Attachment")
-        targetAttachment.Name = "TargetAttachment"
-        targetAttachment.Parent = npcRoot
-    end
-    
-    -- Stały punkt za plecami (5 studów wstecz)
-    targetAttachment.CFrame = CFrame.new(0, 0, 5)
-
-    if not alignPos then
-        alignPos = Instance.new("AlignPosition")
-        alignPos.Name = "FarmAlignPos"
-        alignPos.ForceLimitMode = Enum.ForceLimitMode.PerAxis
-        alignPos.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-        alignPos.Responsiveness = 200 
-        alignPos.Attachment0 = farmAttachment
-        alignPos.Attachment1 = targetAttachment
-        alignPos.Parent = myRoot
-    end
-
-    if not alignOrient then
-        alignOrient = Instance.new("AlignOrientation")
-        alignOrient.Name = "FarmAlignOrient"
-        alignOrient.MaxTorque = math.huge
-        alignOrient.Responsiveness = 200
-        alignOrient.Attachment0 = farmAttachment
-        alignOrient.Attachment1 = targetAttachment
-        alignOrient.Parent = myRoot
-    end
-end
-
--- Główna pętla renderu i farmu
+    if autoFarmEnabled then
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local humanoid = myChar and myChar:FindFirstChildOfClass("Humanoid")
+        
+        if myRoot and humanoid and humanoid.Health > 0 then
